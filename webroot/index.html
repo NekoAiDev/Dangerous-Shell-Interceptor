@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>危险Shell拦截 DSI</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path fill="currentColor" d="M12 1 3 5v6c0 5 3.8 9.4 9 11 5.2-1.6 9-6 9-11V5l-9-4Zm0 2.2 7 3.1v4.6c0 4.1-3 7.8-7 9.2-4-1.4-7-5.1-7-9.2V6.3l7-3.1Z"/>
+      <path fill="currentColor" d="M11 7h2v6h-2V7Zm0 8h2v2h-2v-2Z"/>
+    </svg>
+    <div>
+      <h1>危险Shell拦截 DSI</h1>
+      <p class="sub">Dangerous Shell Interceptor</p>
+    </div>
+  </div>
+  <span id="status-dot" class="dot off" title="运行状态"></span>
+</header>
+
+<main>
+  <section class="card">
+    <div class="card-head">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3 5h18v2H3V5Zm0 6h18v2H3v-2Zm0 6h12v2H3v-2Z"/></svg>
+      <h2>危险规则</h2>
+    </div>
+    <p class="hint">关闭某条规则后，对应类型的命令将不再拦截（直接放行）。</p>
+    <div id="rules" class="rules"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M4 4h16v4H4V4Zm0 6h16v4H4v-4Zm0 6h10v4H4v-4Z"/></svg>
+      <h2>命令检测</h2>
+    </div>
+    <p class="hint">输入一条命令，仅做风险分析，不会真正执行。</p>
+    <div class="test-row">
+      <input id="test-input" type="text" placeholder='例如：rm -rf /data' autocomplete="off">
+      <button id="test-btn" class="btn primary">检测</button>
+    </div>
+    <pre id="test-result" class="result">等待检测...</pre>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M13 3 4 14h6l-1 7 9-11h-6l1-7Z"/></svg>
+      <h2>拦截日志</h2>
+    </div>
+    <pre id="log" class="result log">加载中...</pre>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2 2 7l10 5 10-5-10-5Zm0 7L2 14l10 5 10-5-10-5Z"/></svg>
+      <h2>白名单</h2>
+    </div>
+    <p class="hint">匹配到的命令将直接放行（子串匹配）。</p>
+    <div id="allowlist" class="allowlist"></div>
+    <div class="test-row">
+      <input id="allow-input" type="text" placeholder="新增白名单模式，例如：rm -rf ./build" autocomplete="off">
+      <button id="allow-btn" class="btn">添加</button>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span>NekoAiDev · 危险Shell拦截 DSI</span>
+  <button id="refresh" class="btn ghost">刷新</button>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>

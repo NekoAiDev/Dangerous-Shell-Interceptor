@@ -1,0 +1,146 @@
+#!/system/bin/sh
+# 危险Shell拦截 DSI - 主命令
+# 子命令:
+#   run <命令>            一次性拦截执行：分析后弹窗确认，放行才真正运行
+#   check <命令>          仅分析不执行，输出风险等级与原因（脚本/测试用）
+#   shell                 启动一个加载了拦截函数的交互式 shell
+#   log                   查看拦截日志
+#   allow <模式>          将命令模式加入白名单（后续不再询问）
+#   config                查看/导出当前配置
+#   help                  显示帮助
+
+DSI_LIB_DIR="$(cd "$(dirname "$0")/../lib" 2>/dev/null && pwd)"
+DSI_ROOT="$(cd "$DSI_LIB_DIR/.." 2>/dev/null && pwd)"
+export DSI_LIB_DIR DSI_ROOT
+: "${DSI_CONFIG:=$DSI_ROOT/config.conf}"
+: "${DSI_LOG:=$DSI_ROOT/dsi.log}"
+export DSI_CONFIG DSI_LOG
+
+. "$DSI_LIB_DIR/common.sh"
+. "$DSI_LIB_DIR/detect.sh"
+. "$DSI_LIB_DIR/dialog.sh"
+
+dsi_usage() {
+    cat <<'EOF'
+危险Shell拦截 DSI - 用法
+  dsi run <命令>       拦截并执行一条命令（危险则弹窗确认）
+  dsi check <命令>     仅检测，输出风险等级与原因，不执行
+  dsi shell            启动受保护的交互式 shell
+  dsi log              查看拦截日志
+  dsi allow <模式>     将命令模式加入白名单
+  dsi config           查看当前配置
+  dsi help             显示本帮助
+EOF
+}
+
+dsi_run() {
+    _cmd="$*"
+    [ -z "$_cmd" ] && { echo "用法: dsi run <命令>" >&2; return 2; }
+    dsi_detect "$_cmd"
+    if [ "$DSI_RISK" = "none" ]; then
+        eval "$_cmd"
+        return $?
+    fi
+    dsi_dialog "$DSI_CMDLINE" "$DSI_RISK" "$DSI_RULE" "$DSI_REASON" "$DSI_TARGET"
+    _rc=$?
+    if [ "$_rc" -eq 0 ]; then
+        eval "$_cmd"
+        return $?
+    fi
+    echo "[危险Shell拦截] 已拒绝执行: $_cmd" >&2
+    return 1
+}
+
+dsi_check() {
+    _cmd="$*"
+    [ -z "$_cmd" ] && { echo "用法: dsi check <命令>" >&2; return 2; }
+    dsi_detect "$_cmd"
+    if [ "$DSI_RISK" = "none" ]; then
+        echo "安全: 未检测到危险操作"
+        return 0
+    fi
+    echo "风险等级 : $DSI_RISK"
+    echo "命中规则 : $(dsi_rule_label "$DSI_RULE")"
+    [ -n "$DSI_TARGET" ] && echo "危险目标 : $DSI_TARGET"
+    echo "原因     : $DSI_REASON"
+    return 1
+}
+
+dsi_shell() {
+    export DSI_ROOT DSI_LIB_DIR DSI_CONFIG DSI_LOG
+    echo "[危险Shell拦截] 已进入受保护的交互式 shell，输入 exit 退出。"
+    case "$(basename "${SHELL:-sh}")" in
+        bash) exec bash --rcfile "$DSI_LIB_DIR/dsi-functions.sh" -i ;;
+        *)    ENV="$DSI_LIB_DIR/dsi-functions.sh" exec "${SHELL:-/system/bin/sh}" -i ;;
+    esac
+}
+
+dsi_show_log() {
+    if [ -f "$DSI_LOG" ]; then
+        cat "$DSI_LOG"
+    else
+        echo "暂无拦截日志 ($DSI_LOG)"
+    fi
+}
+
+dsi_allow_cmd() {
+    _pat="$*"
+    [ -z "$_pat" ] && { echo "用法: dsi allow <命令模式>" >&2; return 2; }
+    dsi_allow_add "$_pat"
+    echo "已加入白名单: $_pat"
+}
+
+dsi_unallow_cmd() {
+    _pat="$*"
+    [ -z "$_pat" ] && { echo "用法: dsi unallow <命令模式>" >&2; return 2; }
+    [ -f "$DSI_CONFIG" ] || { echo "配置文件不存在"; return 1; }
+    _before=$(grep -cE '^allow\.' "$DSI_CONFIG" 2>/dev/null)
+    [ -z "$_before" ] && _before=0
+    # 删除匹配该模式的白名单行
+    _esc=$(printf '%s' "$_pat" | sed 's/[][\.*^$/]/\\&/g' 2>/dev/null)
+    sed -i "/^allow\.\*=.*$_esc/d" "$DSI_CONFIG" 2>/dev/null
+    _after=$(grep -cE '^allow\.' "$DSI_CONFIG" 2>/dev/null)
+    [ -z "$_after" ] && _after=0
+    echo "已移除白名单模式: $_pat（移除 $(( _before - _after )) 条）"
+}
+
+dsi_show_config() {
+    echo "配置文件: $DSI_CONFIG"
+    echo "日志文件: $DSI_LOG"
+    echo "全局拦截: $(dsi_config_get global.intercept on)"
+    echo "已启用规则:"
+    for _r in forkbomb dd mkfs rm chmod_chown redirect mv wipe flash selinux mount_rw pm_uninstall curl_pipe kill; do
+        _s=$(dsi_config_get "rule.$_r" on)
+        printf '  %-14s %s\n' "$_r" "$_s"
+    done
+    echo "白名单条目:"
+    grep -E '^allow\.' "$DSI_CONFIG" 2>/dev/null | sed 's/^/  /' || echo "  (空)"
+}
+
+dsi_set() {
+    _k="$1"; _v="$2"
+    [ -z "$_k" ] && { echo "用法: dsi set <键> <值>" >&2; return 2; }
+    [ -z "$_v" ] && { echo "用法: dsi set <键> <值>" >&2; return 2; }
+    [ -f "$DSI_CONFIG" ] || { echo "# 危险Shell拦截 DSI 配置文件" > "$DSI_CONFIG"; }
+    if grep -qE "^[[:space:]]*$_k=" "$DSI_CONFIG" 2>/dev/null; then
+        sed -i "s|^[[:space:]]*$_k=.*|$_k=$_v|" "$DSI_CONFIG" 2>/dev/null
+    else
+        echo "$_k=$_v" >> "$DSI_CONFIG"
+    fi
+    echo "已设置: $_k=$_v"
+}
+
+[ $# -eq 0 ] && { dsi_usage; exit 0; }
+_sub="$1"; shift
+case "$_sub" in
+    run)    dsi_run "$@" ;;
+    check)  dsi_check "$@" ;;
+    shell)  dsi_shell ;;
+    log)    dsi_show_log ;;
+    allow)  dsi_allow_cmd "$@" ;;
+    unallow) dsi_unallow_cmd "$@" ;;
+    set)    dsi_set "$@" ;;
+    config) dsi_show_config ;;
+    help|--help|-h) dsi_usage ;;
+    *) echo "未知子命令: $_sub" >&2; dsi_usage; exit 2 ;;
+esac

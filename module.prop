@@ -1,0 +1,9 @@
+id=dsi
+name=危险Shell拦截 DSI
+version=1.0.0
+versionCode=1
+author=NekoAiDev
+description=监测并拦截危险 shell 命令（如递归删除 /data、dd 写块设备、格式化分区、刷写 boot、关闭 SELinux 等），弹窗确认后再决定是否执行。支持 root（面具 / KernelSU）与 ADB（非 root）使用。
+support=Magisk / KernelSU / ADB
+minApi=21
+needRamdisk=false
