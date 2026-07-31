@@ -190,6 +190,46 @@ document.getElementById("allow-btn").addEventListener("click", async () => {
     alert("添加失败: " + err.message);
   }
 });
+
+// 终端：直接运行 dsi 子命令
+async function termRun() {
+  const inp = document.getElementById("term-input");
+  const res = document.getElementById("term-result");
+  const cmd = inp.value.trim();
+  if (!cmd) { res.textContent = "请输入 dsi 子命令，例如 help"; return; }
+  res.className = "result";
+  res.textContent = "运行中...";
+  try {
+    const { out, err } = await exec(`${DSI} ${cmd}`);
+    res.textContent = (out || "") + (err ? "\n" + err : "");
+    if (!res.textContent) res.textContent = "(无输出)";
+  } catch (err) {
+    res.className = "result crit";
+    res.textContent = "执行失败: " + err.message;
+  }
+}
+document.getElementById("term-btn").addEventListener("click", termRun);
+document.getElementById("term-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") termRun();
+});
+
+// 一键更新
+async function doUpdate() {
+  const res = document.getElementById("term-result");
+  res.className = "result";
+  res.textContent = "更新中...\n";
+  try {
+    const { out, err } = await exec(`${DSI} update`);
+    res.textContent = (out || "") + (err ? "\n" + err : "");
+    if (!res.textContent) res.textContent = "(无输出)";
+    await renderRules(); await renderAllow(); await renderLog();
+  } catch (err) {
+    res.className = "result crit";
+    res.textContent = "更新失败: " + err.message;
+  }
+}
+document.getElementById("update-btn").addEventListener("click", doUpdate);
+
 document.getElementById("refresh").addEventListener("click", () => {
   renderRules(); renderAllow(); renderLog();
 });

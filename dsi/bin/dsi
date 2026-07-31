@@ -28,6 +28,9 @@ dsi_usage() {
   dsi shell            启动受保护的交互式 shell
   dsi log              查看拦截日志
   dsi allow <模式>     将命令模式加入白名单
+  dsi unallow <模式>   从白名单移除
+  dsi set <键> <值>    修改配置项（如 dsi set rule.rm off）
+  dsi update           一键更新（root 自动刷入，ADB 仅下载）
   dsi config           查看当前配置
   dsi help             显示本帮助
 EOF
@@ -130,6 +133,87 @@ dsi_set() {
     echo "已设置: $_k=$_v"
 }
 
+# 版本号转整数（取前三段），用于比较
+_ver2int() {
+    _maj=$(printf '%s' "$1" | sed 's/^v//; s/^V//' | cut -d. -f1)
+    _min=$(printf '%s' "$1" | sed 's/^v//; s/^V//' | cut -d. -f2)
+    _pat=$(printf '%s' "$1" | sed 's/^v//; s/^V//' | cut -d. -f3)
+    [ -z "$_maj" ] && _maj=0; [ -z "$_min" ] && _min=0; [ -z "$_pat" ] && _pat=0
+    echo $(( _maj * 10000 + _min * 100 + _pat ))
+}
+
+# 版本比较：a 新于 b 返回 1，相等返回 0，a 旧于 b 返回 2
+dsi_vercmp() {
+    _ia=$(_ver2int "$1"); _ib=$(_ver2int "$2")
+    if [ "$_ia" -gt "$_ib" ]; then return 1; fi
+    if [ "$_ia" -lt "$_ib" ]; then return 2; fi
+    return 0
+}
+
+# HTTP GET：优先 curl，其次 wget
+dsi_http_get() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$1" 2>/dev/null
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO - "$1" 2>/dev/null
+    else
+        echo ""
+        return 1
+    fi
+}
+
+# 一键更新：查询 GitHub 最新版本，下载并（root）自动刷入
+dsi_update() {
+    _repo="NekoAiDev/Dangerous-Shell-Interceptor"
+    _cur=$(cat "$DSI_ROOT/VERSION" 2>/dev/null)
+    [ -z "$_cur" ] && _cur=$(dsi_config_get version 0.0.0)
+    echo "当前版本: ${_cur:-未知}"
+    echo "正在查询 GitHub 最新版本 ..."
+    _json=$(dsi_http_get "https://api.github.com/repos/$_repo/releases/latest")
+    [ -z "$_json" ] && { echo "无法访问 GitHub（设备需联网，且需 curl/wget）。"; return 1; }
+    _tag=$(printf '%s' "$_json" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name"[ ]*:[ ]*"([^"]+)".*/\1/')
+    _url=$(printf '%s' "$_json" | grep -m1 'browser_download_url' | sed -E 's/.*"browser_download_url"[ ]*:[ ]*"([^"]+)".*/\1/')
+    [ -z "$_tag" ] && { echo "解析最新版本失败。"; return 1; }
+    echo "最新版本: $_tag"
+    dsi_vercmp "$_cur" "$_tag"
+    case $? in
+        0|1) echo "已经是最新版本，无需更新。"; return 0 ;;
+    esac
+    [ -z "$_url" ] && { echo "未找到更新包下载链接。"; return 1; }
+    echo "发现新版本 $_tag，开始更新 ..."
+    if [ "$(id -u 2>/dev/null)" = "0" ]; then
+        _dst="/data/adb/dsi/update/dsi_update.zip"
+    else
+        _dst="/data/local/tmp/dsi_update.zip"
+    fi
+    mkdir -p "$(dirname "$_dst")" 2>/dev/null
+    echo "下载: $_url"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$_url" -o "$_dst" 2>/dev/null
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO "$_dst" "$_url" 2>/dev/null
+    else
+        echo "设备缺少 curl/wget，无法下载。"; return 1
+    fi
+    [ -s "$_dst" ] || { echo "下载失败（文件为空）。"; return 1; }
+    echo "下载完成: $_dst"
+    # root 且具备刷入工具：自动刷入；否则仅下载
+    if [ "$(id -u 2>/dev/null)" = "0" ] && (command -v magisk >/dev/null 2>&1 || command -v ksud >/dev/null 2>&1); then
+        echo "正在刷入模块 ..."
+        if command -v magisk >/dev/null 2>&1; then
+            magisk --install-module "$_dst" && { echo "已刷入，重启后生效。"; return 0; }
+        fi
+        if command -v ksud >/dev/null 2>&1; then
+            ksud module install "$_dst" && { echo "已刷入，重启后生效。"; return 0; }
+        fi
+        echo "自动刷入失败，请手动刷入: $_dst"
+    else
+        echo "当前为非 root（ADB）环境，已下载更新包但不会自动刷入。"
+        echo "更新包位置: $_dst"
+        echo "请通过面具 / KernelSU 手动刷入，或 root 后执行 dsi update 自动刷入。"
+    fi
+}
+
 [ $# -eq 0 ] && { dsi_usage; exit 0; }
 _sub="$1"; shift
 case "$_sub" in
@@ -140,6 +224,7 @@ case "$_sub" in
     allow)  dsi_allow_cmd "$@" ;;
     unallow) dsi_unallow_cmd "$@" ;;
     set)    dsi_set "$@" ;;
+    update) dsi_update "$@" ;;
     config) dsi_show_config ;;
     help|--help|-h) dsi_usage ;;
     *) echo "未知子命令: $_sub" >&2; dsi_usage; exit 2 ;;

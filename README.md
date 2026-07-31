@@ -14,8 +14,13 @@ Dangerous Shell Interceptor
 - 交互弹窗：终端内渲染确认对话框，展示命令、风险等级、危险原因与危险目标，提供「拒绝执行 / 允许执行 / 允许并加入白名单」三个选项。
 - 安全默认：非交互环境（管道、脚本）下一律默认「拒绝执行」并记录日志，避免误伤。
 - 双模式：root 模块（面具 / KernelSU）开机自动部署；非 root 的 ADB 用户也可通过 `install-adb.sh` 使用。
-- WebUI：提供规则开关、白名单管理、拦截日志查看与命令检测界面（KernelSU / MMRL）。
+- WebUI：提供规则开关、白名单管理、拦截日志查看、命令检测与内置终端（KernelSU / MMRL）。
+- WebUI 终端：可直接在网页端运行 dsi 子命令（如 `help`、`check rm -rf /data`、`update`）。
+- 一键更新：网页端点击「一键更新」，root 环境自动下载并刷入新版本；ADB 非 root 仅下载更新包，不自动刷入。
+- 横幅：模块与 WebUI 展示项目横幅图。
 - 中文友好：对话框与说明均为中文，折行按字符宽度处理，兼容各类 locale。
+
+作者：小红蛋 ｜ 组织团队：NekoAiDev
 
 ## 危险命令覆盖范围
 
@@ -75,6 +80,11 @@ adb shell /data/local/tmp/dsi/bin/dsi run "rm -rf /data"
 
 ## 使用方式
 
+安装完成后，所有操作通过 `dsi` 子命令完成（ADB 模式需用完整路径
+`/data/local/tmp/dsi/bin/dsi` 或进入 `dsi shell`，见下方说明）。
+
+### 命令行
+
 | 命令 | 说明 |
 | --- | --- |
 | `dsi run <命令>` | 拦截并执行一条命令；危险则弹窗确认，放行才真正运行 |
@@ -85,7 +95,60 @@ adb shell /data/local/tmp/dsi/bin/dsi run "rm -rf /data"
 | `dsi unallow <模式>` | 从白名单移除 |
 | `dsi set <键> <值>` | 修改配置项（如 `dsi set rule.rm off`） |
 | `dsi config` | 查看当前配置 |
+| `dsi update` | 检查并升级到 GitHub 上的最新版本 |
 | `dsi help` | 显示帮助 |
+
+常用示例：
+
+```sh
+# 检测一条命令是否危险（不执行）
+dsi check rm -rf /data
+dsi check "dd if=/dev/zero of=/dev/block/by-name/boot"
+dsi check "curl http://x.sh | sh"
+
+# 拦截并执行（root 环境危险时会弹窗确认）
+dsi run rm -rf /system
+dsi run pm uninstall com.android.packageinstaller
+
+# 进入受保护的交互式 shell，敲命令即拦截
+dsi shell
+
+# 把某类命令加入白名单，之后不再询问
+dsi allow "rm -rf ./build"
+dsi allow "dd if=/dev/zero of=image.img"
+
+# 查看拦截记录与当前配置
+dsi log
+dsi config
+```
+
+### ADB（非 root）使用示例
+
+非 root 无法透明拦截 adb shell 内输入的每一条命令，请用 `dsi run` 显式执行，
+或进入 `dsi shell` 获得受保护的交互环境：
+
+```sh
+# 安装（见「安装方式 - 方式二」）
+./dsi/install-adb.sh
+
+# 检测 / 执行
+adb shell /data/local/tmp/dsi/bin/dsi check "rm -rf /data"
+adb shell /data/local/tmp/dsi/bin/dsi run "rm -rf /data"
+
+# 受保护的交互式 shell
+adb shell /data/local/tmp/dsi/bin/dsi shell
+```
+
+### WebUI（KernelSU / MMRL）
+
+root 环境刷入模块后，可在 KernelSU 或 MMRL 中打开本模块 WebUI，提供：
+
+- **危险规则**：逐条开关各检测规则。
+- **命令检测**：在线输入命令做风险分析。
+- **终端**：直接运行 dsi 子命令（如 `help`、`check rm -rf /data`、`config`、`log`、`update`）。
+- **拦截日志**：查看历史拦截记录。
+- **白名单**：在线增删白名单模式。
+- **一键更新**：点击即可升级到最新版本。
 
 ### 透明拦截（可选）
 
@@ -97,6 +160,26 @@ source /data/adb/dsi/lib/dsi-functions.sh
 
 此后 `rm`、`dd`、`chmod`、`chown`、`chgrp`、`mv` 等命令会被自动包裹并拦截。
 退出会话或执行 `exec $SHELL` 重新进入即可恢复原样。该方式不会影响系统其他进程，安全可控。
+
+## 一键更新
+
+模块发布在 GitHub 仓库的 Releases 中，更新逻辑如下：
+
+- **命令行**：执行 `dsi update`，脚本会访问 GitHub Releases 接口，
+  比对当前 `VERSION` 文件中的版本号与最新发布版本，若本地较旧则下载新版本包。
+- **WebUI**：点击页脚的「一键更新」按钮，等效于执行 `dsi update`。
+
+下载与刷入行为按运行环境自动区分：
+
+| 环境 | 行为 |
+| --- | --- |
+| root（已安装面具） | 下载后调用 `magisk --install-module` 自动刷入，重启生效 |
+| root（已安装 KernelSU） | 下载后调用 `ksud module install` 自动刷入 |
+| ADB / 非 root | 仅下载新版本包到本地，需用户手动刷入，**不会**自动刷入 |
+
+> 说明：非 root 环境因权限限制无法自动刷入模块，所以只会把更新包下载到设备
+> （root 模式为 `/data/adb/dsi/update/`，ADB 模式为 `/data/local/tmp/`），
+> 由用户自行通过面具 / KernelSU 安装。
 
 ## 配置说明
 

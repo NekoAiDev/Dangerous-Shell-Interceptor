@@ -21,6 +21,8 @@
   <span id="status-dot" class="dot off" title="运行状态"></span>
 </header>
 
+<img class="banner-img" src="https://galler.nekoaidev.top/images/022.webp" alt="危险Shell拦截 DSI 横幅">
+
 <main>
   <section class="card">
     <div class="card-head">
@@ -46,6 +48,19 @@
 
   <section class="card">
     <div class="card-head">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M4 4h16v2H4V4Zm0 4h16v2H4V8Zm0 4h16v2H4v-2Zm0 4h16v2H4v-2Zm2 2h12v2H6v-2Z"/></svg>
+      <h2>终端</h2>
+    </div>
+    <p class="hint">直接运行 dsi 子命令，例如：help、check rm -rf /data、config、log、update。</p>
+    <div class="test-row">
+      <input id="term-input" type="text" placeholder='dsi check rm -rf /data' autocomplete="off">
+      <button id="term-btn" class="btn primary">运行</button>
+    </div>
+    <pre id="term-result" class="result">等待输入...</pre>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M13 3 4 14h6l-1 7 9-11h-6l1-7Z"/></svg>
       <h2>拦截日志</h2>
     </div>
@@ -67,7 +82,9 @@
 </main>
 
 <footer>
-  <span>NekoAiDev · 危险Shell拦截 DSI</span>
+  <span class="owner">本模块所有者归小红蛋所有</span>
+  <a class="btn ghost" href="https://github.com/NekoAiDev/Dangerous-Shell-Interceptor" target="_blank" rel="noopener">GitHub 仓库</a>
+  <button id="update-btn" class="btn">一键更新</button>
   <button id="refresh" class="btn ghost">刷新</button>
 </footer>
 

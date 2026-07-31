@@ -30,6 +30,10 @@ install_dsi() {
         cp -f "$SRC/config.example.conf" "$DST/config.conf" 2>/dev/null
     fi
 
+    # 记录版本号，供 dsi update 比对
+    _ver=$(grep -E '^version=' "$MODDIR/module.prop" 2>/dev/null | head -1 | cut -d= -f2-)
+    [ -n "$_ver" ] && echo "$_ver" > "$DST/VERSION" 2>/dev/null
+
     chmod 0755 "$DST/bin/dsi"
     chmod 0644 "$DST/lib/"*.sh "$DST/config.conf" 2>/dev/null
     chmod 0755 "$DST/install-adb.sh" 2>/dev/null

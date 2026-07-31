@@ -39,6 +39,10 @@ echo "[危险Shell拦截] 设置可执行权限 ..."
 $ADB shell "chmod -R 0755 $DEST/bin $DEST/lib" 2>/dev/null || true
 $ADB shell "chmod 0644 $DEST/config.conf" 2>/dev/null || true
 
+# 记录版本号，供 dsi update 比对
+_VER=$(grep -E '^version=' "$HERE/../module.prop" 2>/dev/null | head -1 | cut -d= -f2-)
+[ -n "$_VER" ] && $ADB shell "echo $_VER > $DEST/VERSION" 2>/dev/null || true
+
 echo ""
 echo "[危险Shell拦截] 安装完成。在设备上的使用方式："
 echo "  进入受保护 shell : adb shell $DEST/bin/dsi shell"
