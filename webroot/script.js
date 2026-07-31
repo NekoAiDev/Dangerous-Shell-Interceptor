@@ -196,11 +196,13 @@ async function termRun() {
   const inp = document.getElementById("term-input");
   const res = document.getElementById("term-result");
   const cmd = inp.value.trim();
-  if (!cmd) { res.textContent = "请输入 dsi 子命令，例如 help"; return; }
+  if (!cmd) { res.textContent = "请输入 dsi 子命令，例如 check rm -rf /data"; return; }
+  // 允许用户直接粘贴完整命令（含 dsi 前缀）也能工作
+  let sub = cmd.replace(/^dsi(\s|$)/, "");
   res.className = "result";
   res.textContent = "运行中...";
   try {
-    const { out, err } = await exec(`${DSI} ${cmd}`);
+    const { out, err } = await exec(`${DSI} ${sub}`);
     res.textContent = (out || "") + (err ? "\n" + err : "");
     if (!res.textContent) res.textContent = "(无输出)";
   } catch (err) {
